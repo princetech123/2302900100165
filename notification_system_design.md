@@ -794,3 +794,65 @@ This guarantees that no notifications are lost.
 ## Conclusion
 
 The original design is not suitable for large-scale notification delivery. A queue-based asynchronous architecture provides reliability, fault tolerance, and scalability. Notifications should be saved to the database first, while email and push delivery should be handled independently by worker services with retry support.
+
+# Stage 6 – Priority Inbox
+
+## Problem Statement
+
+The product team wants a Priority Inbox that displays the most important unread notifications first.
+
+Priority is determined using:
+
+- Notification Type Weight
+- Recency
+
+Weight Assignment:
+
+- Placement = 3
+- Result = 2
+- Event = 1
+
+Notifications are sorted first by weight and then by timestamp in descending order.
+
+The top 10 unread notifications are displayed in the Priority Inbox.
+
+---
+
+## Approach
+
+Each notification receives a priority score.
+
+Priority Rules:
+
+1. Placement notifications have highest priority.
+2. Result notifications have medium priority.
+3. Event notifications have lowest priority.
+4. Newer notifications are ranked above older notifications.
+
+---
+
+## Maintaining Top 10 Efficiently
+
+If notifications continuously arrive, sorting all notifications every time is inefficient.
+
+To optimize performance, a Min Heap (Priority Queue) of size 10 can be maintained.
+
+Process:
+
+1. Calculate priority score.
+2. Compare with minimum element in heap.
+3. Replace if new notification has higher priority.
+4. Keep heap size fixed at 10.
+
+Complexity:
+
+- Insert = O(log 10)
+- Delete = O(log 10)
+
+This approach remains efficient even for millions of notifications.
+
+---
+
+## Conclusion
+
+The Priority Inbox improves user experience by ensuring that important notifications such as placement opportunities are always visible first. Using a fixed-size heap allows the system to scale efficiently while maintaining fast access to the most relevant notifications.
