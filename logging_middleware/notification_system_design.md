@@ -653,3 +653,144 @@ This approach minimizes database load while maintaining fast response times and 
 ## Conclusion
 
 Fetching notifications directly from the database on every page load is not scalable. By combining caching, pagination, WebSockets, read replicas, and controlled refresh mechanisms, the notification system can efficiently serve thousands of students while maintaining low latency and high performance.
+# Stage 5 – Reliable and Scalable Notification Delivery
+
+## Problems in the Current Implementation
+
+The current implementation processes all students sequentially.
+
+```text
+for each student:
+    send_email()
+    save_to_db()
+    push_to_app()
+```
+
+This approach has several drawbacks:
+
+1. Very slow for 50,000 students.
+2. Failure of one email can interrupt the process.
+3. No retry mechanism.
+4. No tracking of failed notifications.
+5. Email service latency affects overall execution.
+6. Difficult to scale during placement season.
+
+If email delivery fails for 200 students, identifying and reprocessing failed records becomes difficult.
+
+---
+
+## Should Database Save and Email Sending Happen Together?
+
+No.
+
+Saving notification records and sending emails should be separated.
+
+### Reason
+
+Database operations are critical and must succeed first.
+
+Email delivery depends on external services and may fail due to:
+
+* Network issues
+* SMTP downtime
+* Rate limits
+* Temporary provider failures
+
+The notification should be stored even if email delivery fails.
+
+This ensures no notification data is lost.
+
+---
+
+## Proposed Architecture
+
+1. Save notification in database.
+2. Publish notification event to a message queue.
+3. Worker services process the queue.
+4. Email service sends emails.
+5. Push service sends in-app notifications.
+6. Failed messages are retried automatically.
+
+### Recommended Technologies
+
+* PostgreSQL
+* Redis / RabbitMQ / Kafka
+* WebSockets
+* Worker Services
+
+---
+
+## Revised Pseudocode
+
+```text
+function notify_all(student_ids, message):
+
+    for student_id in student_ids:
+
+        save_notification_to_db(student_id, message)
+
+        publish_to_queue({
+            student_id: student_id,
+            message: message
+        })
+
+
+EmailWorker():
+
+    while queue_not_empty:
+
+        notification = consume_message()
+
+        try:
+            send_email(
+                notification.student_id,
+                notification.message
+            )
+
+        catch error:
+
+            retry(notification)
+
+
+PushWorker():
+
+    while queue_not_empty:
+
+        notification = consume_message()
+
+        push_to_app(
+            notification.student_id,
+            notification.message
+        )
+```
+
+---
+
+## Handling Failed Emails
+
+If email delivery fails:
+
+1. Log the failure.
+2. Retry automatically.
+3. Move permanently failed messages to a Dead Letter Queue (DLQ).
+4. Allow administrators to reprocess failed messages later.
+
+This guarantees that no notifications are lost.
+
+---
+
+## Benefits of the New Design
+
+* Faster processing.
+* Better fault tolerance.
+* Supports 50,000+ students.
+* Easy horizontal scaling.
+* Automatic retries.
+* Improved reliability.
+* Better user experience.
+
+---
+
+## Conclusion
+
+The original design is not suitable for large-scale notification delivery. A queue-based asynchronous architecture provides reliability, fault tolerance, and scalability. Notifications should be saved to the database first, while email and push delivery should be handled independently by worker services with retry support.
