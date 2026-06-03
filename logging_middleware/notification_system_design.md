@@ -191,3 +191,190 @@ To provide a smooth user experience, notifications should be delivered in real t
 ## Conclusion
 
 This API design provides a clean and scalable foundation for a campus notification platform. It supports notification management, unread tracking, and real-time delivery while maintaining a simple and consistent REST API structure.
+# Stage 2 – Database Design
+
+## Database Selection
+
+For this notification platform, I would choose PostgreSQL as the primary database.
+
+### Reasons
+
+- Supports ACID transactions.
+- Reliable for large-scale applications.
+- Powerful indexing capabilities.
+- Supports millions of notification records efficiently.
+- Easy integration with backend services.
+
+---
+
+## Database Schema
+
+### Users Table
+
+```sql
+CREATE TABLE users (
+    id UUID PRIMARY KEY,
+    name VARCHAR(100),
+    email VARCHAR(100) UNIQUE
+);
+```
+
+### Notifications Table
+
+```sql
+CREATE TABLE notifications (
+    id UUID PRIMARY KEY,
+    user_id UUID REFERENCES users(id),
+    type VARCHAR(20),
+    message TEXT,
+    is_read BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+---
+
+## Indexes
+
+```sql
+CREATE INDEX idx_user_notifications
+ON notifications(user_id);
+
+CREATE INDEX idx_user_read_status
+ON notifications(user_id, is_read);
+
+CREATE INDEX idx_notification_date
+ON notifications(created_at DESC);
+```
+
+---
+
+## Possible Scaling Problems
+
+As the number of students and notifications increases, the following problems may occur:
+
+### 1. Slow Queries
+
+Fetching notifications for a user may become slower when millions of records exist.
+
+### Solution
+
+Use indexes on:
+
+- user_id
+- is_read
+- created_at
+
+---
+
+### 2. Large Table Size
+
+The notifications table may grow rapidly.
+
+### Solution
+
+Use table partitioning based on creation date.
+
+Example:
+
+- notifications_2026
+- notifications_2027
+
+This reduces scan time.
+
+---
+
+### 3. High Read Traffic
+
+Many students may request notifications simultaneously.
+
+### Solution
+
+Use Redis caching for frequently accessed notifications and unread counts.
+
+---
+
+### 4. Database Bottleneck
+
+Single database server may become overloaded.
+
+### Solution
+
+Use Read Replicas.
+
+- Primary DB handles writes.
+- Replica DB handles reads.
+
+---
+
+## SQL Queries
+
+### Create Notification
+
+```sql
+INSERT INTO notifications
+(id, user_id, type, message)
+VALUES
+(uuid_generate_v4(),
+'user123',
+'Placement',
+'Microsoft hiring for SDE role');
+```
+
+---
+
+### Get All Notifications
+
+```sql
+SELECT *
+FROM notifications
+WHERE user_id = 'user123'
+ORDER BY created_at DESC;
+```
+
+---
+
+### Get Unread Notifications
+
+```sql
+SELECT *
+FROM notifications
+WHERE user_id = 'user123'
+AND is_read = FALSE
+ORDER BY created_at DESC;
+```
+
+---
+
+### Mark Notification As Read
+
+```sql
+UPDATE notifications
+SET is_read = TRUE
+WHERE id = 'notification_id';
+```
+
+---
+
+### Mark All Notifications As Read
+
+```sql
+UPDATE notifications
+SET is_read = TRUE
+WHERE user_id = 'user123';
+```
+
+---
+
+### Delete Notification
+
+```sql
+DELETE FROM notifications
+WHERE id = 'notification_id';
+```
+
+---
+
+## Conclusion
+
+PostgreSQL is a suitable choice for this notification system because it provides reliability, strong consistency, indexing support, and scalability options. As data grows, techniques such as indexing, partitioning, caching, and read replicas can be used to maintain performance.
