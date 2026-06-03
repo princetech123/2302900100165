@@ -378,3 +378,125 @@ WHERE id = 'notification_id';
 ## Conclusion
 
 PostgreSQL is a suitable choice for this notification system because it provides reliability, strong consistency, indexing support, and scalability options. As data grows, techniques such as indexing, partitioning, caching, and read replicas can be used to maintain performance.
+
+# Stage 3 – Query Optimization and Indexing
+
+## Analysis of the Existing Query
+
+The existing query is:
+
+```sql
+SELECT *
+FROM notifications
+WHERE studentID = 1042
+AND isRead = false
+ORDER BY createdAt ASC;
+```
+
+### Is the Query Correct?
+
+Yes, the query is logically correct because it fetches all unread notifications for a specific student and sorts them based on the notification creation time.
+
+However, as the system grows to 50,000 students and 5,000,000 notifications, the query may become slow and inefficient.
+
+---
+
+## Why is the Query Slow?
+
+### 1. Full Table Scan
+
+If no suitable index exists, the database must scan a large portion of the notifications table to find matching records.
+
+This becomes expensive when millions of notifications are stored.
+
+### 2. Sorting Overhead
+
+After filtering unread notifications, the database still needs to sort the results using the `createdAt` column.
+
+Sorting large datasets increases query execution time.
+
+### 3. Selecting All Columns
+
+Using `SELECT *` retrieves every column from the table, even when only a few fields are needed.
+
+This increases memory usage and network transfer time.
+
+---
+
+## Recommended Optimization
+
+### Composite Index
+
+A composite index should be created on the columns used in filtering and sorting.
+
+```sql
+CREATE INDEX idx_notifications_student_read_date
+ON notifications(studentID, isRead, createdAt);
+```
+
+This allows the database to quickly locate unread notifications for a student and return them in the required order.
+
+---
+
+## Optimized Query
+
+```sql
+SELECT id,
+       notificationType,
+       message,
+       createdAt
+FROM notifications
+WHERE studentID = 1042
+AND isRead = FALSE
+ORDER BY createdAt ASC;
+```
+
+This query fetches only the required columns, reducing unnecessary data transfer.
+
+---
+
+## Should We Add Indexes on Every Column?
+
+No.
+
+Adding indexes on every column is not a good practice.
+
+### Reasons
+
+* Increased storage consumption.
+* Slower INSERT operations.
+* Slower UPDATE operations.
+* Slower DELETE operations.
+* Additional maintenance overhead.
+
+Indexes should only be created on frequently searched, filtered, sorted, or joined columns.
+
+---
+
+## Query to Find Students Who Received Placement Notifications in the Last 7 Days
+
+```sql
+SELECT DISTINCT studentID
+FROM notifications
+WHERE notificationType = 'Placement'
+AND createdAt >= NOW() - INTERVAL 7 DAY;
+```
+
+This query returns all unique students who received a placement-related notification during the previous seven days.
+
+---
+
+## Additional Index Recommendation
+
+```sql
+CREATE INDEX idx_notification_type_date
+ON notifications(notificationType, createdAt);
+```
+
+This index improves the performance of reporting and filtering operations based on notification type and date.
+
+---
+
+## Conclusion
+
+The existing query is functionally correct but may perform poorly when the notification table contains millions of records. Creating a composite index on `(studentID, isRead, createdAt)` significantly improves query performance. Indexes should be added only where necessary because excessive indexing can negatively affect database write operations and increase storage requirements.
