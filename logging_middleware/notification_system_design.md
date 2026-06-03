@@ -500,3 +500,156 @@ This index improves the performance of reporting and filtering operations based 
 ## Conclusion
 
 The existing query is functionally correct but may perform poorly when the notification table contains millions of records. Creating a composite index on `(studentID, isRead, createdAt)` significantly improves query performance. Indexes should be added only where necessary because excessive indexing can negatively affect database write operations and increase storage requirements.
+
+# Stage 4 – Performance Improvement and Reducing Database Load
+
+## Problem Statement
+
+Currently, notifications are fetched from the database every time a user loads a page. As the number of users increases, the database receives a large number of repeated read requests, resulting in high CPU usage, increased response times, and poor user experience.
+
+---
+
+## Proposed Solutions
+
+### 1. Redis Caching
+
+Instead of querying the database on every request, frequently accessed notifications can be stored in Redis.
+
+#### Approach
+
+1. User requests notifications.
+2. Application checks Redis cache.
+3. If data exists, return it immediately.
+4. If data is not found, fetch from PostgreSQL and store it in Redis.
+
+#### Benefits
+
+* Significantly reduces database queries.
+* Faster response times.
+* Improved user experience.
+
+#### Tradeoffs
+
+* Additional infrastructure cost.
+* Cached data may become slightly outdated until refreshed.
+
+---
+
+### 2. Pagination
+
+Loading all notifications at once is inefficient.
+
+#### Approach
+
+Return notifications in smaller batches.
+
+Example:
+
+```http id="0wb6ha"
+GET /api/notifications?page=1&limit=20
+```
+
+#### Benefits
+
+* Reduced database load.
+* Faster API responses.
+* Lower memory consumption.
+
+#### Tradeoffs
+
+* Additional API calls when users navigate through pages.
+
+---
+
+### 3. Infinite Scrolling
+
+Instead of loading hundreds of notifications at once, load more data only when the user scrolls.
+
+#### Benefits
+
+* Better user experience.
+* Reduced initial page load time.
+
+#### Tradeoffs
+
+* Slightly more frontend complexity.
+
+---
+
+### 4. Real-Time Notifications using WebSockets
+
+Currently users repeatedly fetch notifications through API requests.
+
+Instead, use WebSockets to push notifications from the server whenever new notifications arrive.
+
+#### Benefits
+
+* Eliminates unnecessary polling.
+* Instant notification delivery.
+* Reduced database reads.
+
+#### Tradeoffs
+
+* More complex backend implementation.
+* Requires persistent connections.
+
+---
+
+### 5. Read Replicas
+
+Use separate database instances for read operations.
+
+#### Architecture
+
+* Primary Database → Handles Writes
+* Replica Database → Handles Reads
+
+#### Benefits
+
+* Distributes database load.
+* Improves scalability.
+
+#### Tradeoffs
+
+* Increased infrastructure cost.
+* Small replication delay may occur.
+
+---
+
+### 6. Background Refresh Strategy
+
+Instead of requesting notifications on every page load, refresh notifications periodically.
+
+Example:
+
+* Initial fetch on login.
+* Refresh every 30–60 seconds.
+
+#### Benefits
+
+* Fewer database queries.
+* Lower server load.
+
+#### Tradeoffs
+
+* Users may not see notifications immediately.
+
+---
+
+## Recommended Architecture
+
+The best solution is a combination of:
+
+1. PostgreSQL as the primary database.
+2. Redis for caching notifications.
+3. Pagination for large notification lists.
+4. WebSockets for real-time updates.
+5. Read replicas for handling heavy read traffic.
+
+This approach minimizes database load while maintaining fast response times and an excellent user experience.
+
+---
+
+## Conclusion
+
+Fetching notifications directly from the database on every page load is not scalable. By combining caching, pagination, WebSockets, read replicas, and controlled refresh mechanisms, the notification system can efficiently serve thousands of students while maintaining low latency and high performance.
